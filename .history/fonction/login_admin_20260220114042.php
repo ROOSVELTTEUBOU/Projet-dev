@@ -1,0 +1,171 @@
+<?php
+session_start();
+
+// Connexion à la base de données
+$host = "localhost";
+$user = "root";
+$db_pass = "";
+$db = "appecom";
+
+$conn = new mysqli($host, $user, $db_pass, $db);
+
+if ($conn->connect_error) {
+    die("Connexion échouée : " . $conn->connect_error);
+}
+
+$error = ""; // Variable pour stocker le message d'erreur
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email'], $_POST['password'])) {
+  $email = trim($_POST['email']);
+  $password = trim($_POST['password']);
+
+    // Vérifiez que les champs ne sont pas vides
+    if (empty($email) || empty($password)) {
+      $error = "Veuillez remplir tous les champs ❌";
+    } else {
+        // Préparer la requête SQL sécurisée
+        $sql = "SELECT id_utilisateur, nom, mot_de_passe FROM utilisateur WHERE email = ?";
+        $stmt = $conn->prepare($sql);
+
+        if ($stmt) {
+            $stmt->bind_param("s", $email);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if ($row = $result->fetch_assoc()) {
+              // Vérification du mot de passe (supporte hashé ou en clair si legacy)
+              $stored = $row['mot_de_passe'];
+              $password_ok = false;
+              if (!empty($stored) && password_verify($password, $stored)) {
+                $password_ok = true;
+              } elseif ($password === $stored) {
+                $password_ok = true; // fallback pour mots de passe non hashés
+              }
+
+              if ($password_ok) {
+                    // Stockage en session
+                    $_SESSION['id_utilisateur'] = $row['id_utilisateur'];
+                    $_SESSION['user'] = htmlspecialchars($row['nom']); // Protection contre XSS
+
+                    // Redirection vers le dashboard admin
+                    header("Location: ../fonction_interne/dashboard_admin.php");
+                    exit();
+              } else {
+                $error = "Email ou mot de passe incorrect.";
+                }
+            } else {
+              $error = "Aucun compte trouvé pour cet e‑mail.";
+            }
+
+            $stmt->close();
+        } else {
+            $error = "❌Erreur lors de la préparation de la requête";
+        }
+    }
+}
+
+$conn->close();
+?>
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Connexion Administrateur</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #007bff, #0056b3);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .login-container {
+      background-color: #ffffff;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      width: 350px;
+    }
+
+    .login-container h2 {
+      text-align: center;
+      color: #0056b3;
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #0056b3;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #007bff;
+      border-radius: 5px;
+      outline: none;
+    }
+
+    .form-group input:focus {
+      border-color: #0056b3;
+      box-shadow: 0 0 5px rgba(0,91,187,0.5);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      background-color: #007bff;
+      border: none;
+      border-radius: 5px;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .btn:hover {
+      background-color: #0056b3;
+    }
+
+    .message {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 14px;
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <h2>Connexion Utilisateur Administrateur</h2>
+    
+    <form action="../fonction/login_admin.php" method="POST">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" name="email" required>
+      </div>
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input type="password" name="password" required>
+      </div>
+      <?php if (!empty($error)): ?>
+        <div class="message">
+            <?php echo htmlspecialchars($error); ?>
+        </div>
+      <?php endif; ?>
+      <button type="submit" class="btn">Se connecter</button>
+    </form>
+  </div>
+</body>
+</html>
